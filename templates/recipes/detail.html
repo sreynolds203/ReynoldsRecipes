@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<main style="max-width:800px;margin:24px auto">
+  <h1>{{ object.title }}</h1>
+  {% if object.image %}
+    <img src="{{ object.image.url }}" alt="" style="width:100%;max-height:360px;object-fit:cover;border-radius:8px"/>
+  {% endif %}
+  <p style="color:#555">{{ object.description }}</p>
+
+  <h3>Ingredients</h3>
+  <pre style="white-space:pre-wrap">{{ object.ingredients }}</pre>
+
+  <h3>Steps</h3>
+  <pre style="white-space:pre-wrap">{{ object.steps }}</pre>
+
+  <p>
+    <a href="{% url 'recipes:update' object.pk %}">Edit</a> ·
+    <a href="{% url 'recipes:delete' object.pk %}">Delete</a> ·
+    <a href="{% url 'recipes:list' %}">Back</a>
+  </p>
+</main>
+{% endblock %}

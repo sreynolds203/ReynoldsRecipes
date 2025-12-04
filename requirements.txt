@@ -1,4 +1,7 @@
+antiorm==1.2.1
 asgiref==3.11.0
+db==0.1.1
+db-sqlite3==0.0.1
 Django==5.2.9
 sqlparse==0.5.4
 tzdata==2025.2
