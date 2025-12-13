@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width:700px;margin:24px auto;background:#fff;padding:18px;border-radius:8px">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <h1>Shopping List</h1>
+    <a href="{% url 'recipes:list' %}">Back to recipes</a>
+  </div>
+
+  {% if recipes %}
+    <div style="margin-top:8px;color:#555">From:
+      {% for r in recipes %}
+        <strong>{{ r.title }}</strong>{% if not forloop.last %}, {% endif %}
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <hr style="margin:12px 0"/>
+
+  {% if items %}
+    <ul>
+      {% for ing, count in items %}
+        <li>{{ ing }}{% if count > 1 %} <em>(appears in {{ count }} recipes)</em>{% endif %}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No ingredients found. Select one or more recipes to build a shopping list.</p>
+  {% endif %}
+
+</div>
+{% endblock %}
