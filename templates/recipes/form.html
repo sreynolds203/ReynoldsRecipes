@@ -1,15 +1,264 @@
+{% extends "base.html" %}
 {% load static %}
-{% block styles %}
-<link rel="stylesheet" href="{% static 'recipes/css/style.css' %}">
-{% endblock %}
 {% block content %}
-<main class="form-container">
+<div style="max-width:700px;margin:24px auto">
   <h1>{% if object %}Edit{% else %}New{% endif %} Recipe</h1>
-  <form method="post" enctype="multipart/form-data" novalidate>
+  <form method="post" enctype="multipart/form-data" style="background:#fff;padding:20px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.06)">
     {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Save Recipe</button>
+    
+    <!-- Title -->
+    <div style="margin-bottom:16px">
+      <label for="{{ form.title.id_for_label }}" style="display:block;font-weight:600;margin-bottom:6px">{{ form.title.label }}</label>
+      {{ form.title }}
+      {% if form.title.errors %}<div style="color:red;font-size:.9rem">{{ form.title.errors }}</div>{% endif %}
+    </div>
+
+    <!-- Author -->
+    <div style="margin-bottom:16px">
+      <label for="{{ form.author.id_for_label }}" style="display:block;font-weight:600;margin-bottom:6px">{{ form.author.label }}</label>
+      {{ form.author }}
+      {% if form.author.errors %}<div style="color:red;font-size:.9rem">{{ form.author.errors }}</div>{% endif %}
+    </div>
+
+    <!-- Description -->
+    <div style="margin-bottom:16px">
+      <label for="{{ form.description.id_for_label }}" style="display:block;font-weight:600;margin-bottom:6px">{{ form.description.label }}</label>
+      {{ form.description }}
+      {% if form.description.errors %}<div style="color:red;font-size:.9rem">{{ form.description.errors }}</div>{% endif %}
+    </div>
+
+    <!-- Prep Time and Cook Time -->
+    <div style="display:flex;gap:20px;margin-bottom:16px">
+      <div style="flex:1">
+        <label for="{{ form.prep_time_minutes.id_for_label }}" style="display:block;font-weight:600;margin-bottom:6px">{{ form.prep_time_minutes.label }}</label>
+        {{ form.prep_time_minutes }}
+        {% if form.prep_time_minutes.errors %}<div style="color:red;font-size:.9rem">{{ form.prep_time_minutes.errors }}</div>{% endif %}
+      </div>
+      <div style="flex:1">
+        <label for="{{ form.cook_time_minutes.id_for_label }}" style="display:block;font-weight:600;margin-bottom:6px">{{ form.cook_time_minutes.label }}</label>
+        {{ form.cook_time_minutes }}
+        {% if form.cook_time_minutes.errors %}<div style="color:red;font-size:.9rem">{{ form.cook_time_minutes.errors }}</div>{% endif %}
+      </div>
+    </div>
+
+    <!-- Ingredients with 4-field editor -->
+    <div style="margin-bottom:16px">
+      <label style="display:block;font-weight:600;margin-bottom:6px">{{ form.ingredients.label }}</label>
+
+      <div id="ingredients-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+        <!-- ingredient rows inserted here -->
+      </div>
+
+      <button type="button" id="add-ingredient-btn" style="background:#0066cc;color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer;margin-bottom:12px;font-weight:600">+ Add Ingredient</button>
+
+      <!-- Hidden textarea to store serialized ingredients -->
+      <textarea id="{{ form.ingredients.id_for_label }}" name="ingredients" style="display:none">{{ ingredients_raw }}</textarea>
+      {% if form.ingredients.errors %}<div style="color:red;font-size:.9rem">{{ form.ingredients.errors }}</div>{% endif %}
+    </div>
+
+    <!-- Steps -->
+    <div style="margin-bottom:16px">
+      <label for="{{ form.steps.id_for_label }}" style="display:block;font-weight:600;margin-bottom:6px">{{ form.steps.label }}</label>
+      {{ form.steps }}
+      <div style="font-size:.85rem;color:#555;margin-top:4px">Number each step or separate paragraphs for each instruction</div>
+      {% if form.steps.errors %}<div style="color:red;font-size:.9rem">{{ form.steps.errors }}</div>{% endif %}
+    </div>
+
+    <!-- Tags -->
+    <div style="margin-bottom:20px">
+      <label for="{{ form.tags.id_for_label }}" style="display:block;font-weight:600;margin-bottom:6px">{{ form.tags.label }}</label>
+      {{ form.tags }}
+      <div style="font-size:.85rem;color:#555;margin-top:4px">Comma-separated tags (e.g., dessert, quick, vegan)</div>
+      {% if form.tags.errors %}<div style="color:red;font-size:.9rem">{{ form.tags.errors }}</div>{% endif %}
+    </div>
+
+    <button type="submit" style="background:#0066cc;color:#fff;padding:10px 20px;border:none;border-radius:6px;cursor:pointer;font-weight:600">Save Recipe</button>
   </form>
   <p><a href="{% url 'recipes:list' %}">Cancel</a></p>
-</main>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function(){
+  const unitOptions = [
+    {% for u in unit_options %}"{{ u }}"{% if not forloop.last %}, {% endif %}{% endfor %}
+  ];
+
+  const ingredientsList = document.getElementById('ingredients-list');
+  const hiddenField = document.getElementById('{{ form.ingredients.id_for_label }}');
+  const addBtn = document.getElementById('add-ingredient-btn');
+  let draggedRow = null;
+
+  function createIngredientRow(qty = '', unit = '', name = '', desc = '') {
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.gap = '8px';
+    row.style.alignItems = 'center';
+    row.style.padding = '8px';
+    row.style.background = '#f9f9f9';
+    row.style.borderRadius = '6px';
+    row.draggable = true;
+
+    // Drag handle
+    const handle = document.createElement('span');
+    handle.textContent = '≡';
+    handle.title = 'Drag to reorder';
+    handle.style.cursor = 'grab';
+    handle.style.color = '#999';
+    handle.style.fontSize = '18px';
+    handle.style.fontWeight = 'bold';
+    handle.style.userSelect = 'none';
+    handle.style.marginRight = '4px';
+
+    // Quantity input
+    const qtyInput = document.createElement('input');
+    qtyInput.type = 'number';
+    qtyInput.placeholder = 'Qty';
+    qtyInput.value = qty;
+    qtyInput.step = 'any';
+    qtyInput.style.width = '70px';
+    qtyInput.style.padding = '6px';
+    qtyInput.style.border = '1px solid #ddd';
+    qtyInput.style.borderRadius = '4px';
+
+    // Unit dropdown
+    const unitSelect = document.createElement('select');
+    unitSelect.style.padding = '6px';
+    unitSelect.style.border = '1px solid #ddd';
+    unitSelect.style.borderRadius = '4px';
+    unitSelect.style.width = '80px';
+    unitSelect.innerHTML = '<option value="">(unit)</option>' +
+      unitOptions.map(u => `<option value="${u}">${u}</option>`).join('');
+    unitSelect.value = unit;
+
+    // Ingredient name input
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.placeholder = 'Ingredient name';
+    nameInput.value = name;
+    nameInput.style.flex = '1';
+    nameInput.style.padding = '6px';
+    nameInput.style.border = '1px solid #ddd';
+    nameInput.style.borderRadius = '4px';
+
+    // Description/note input
+    const descInput = document.createElement('input');
+    descInput.type = 'text';
+    descInput.placeholder = 'Optional (e.g., diced)';
+    descInput.value = desc;
+    descInput.style.width = '140px';
+    descInput.style.padding = '6px';
+    descInput.style.border = '1px solid #ddd';
+    descInput.style.borderRadius = '4px';
+
+    // Remove button
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.textContent = '✕';
+    removeBtn.title = 'Delete ingredient';
+    removeBtn.style.padding = '6px 10px';
+    removeBtn.style.border = '1px solid #ddd';
+    removeBtn.style.borderRadius = '4px';
+    removeBtn.style.background = '#fff';
+    removeBtn.style.cursor = 'pointer';
+    removeBtn.style.color = '#d32f2f';
+    removeBtn.style.fontWeight = 'bold';
+    removeBtn.onclick = () => row.remove();
+
+    row.appendChild(handle);
+    row.appendChild(qtyInput);
+    row.appendChild(unitSelect);
+    row.appendChild(nameInput);
+    row.appendChild(descInput);
+    row.appendChild(removeBtn);
+
+    // Drag and drop handlers
+    row.addEventListener('dragstart', (e) => {
+      draggedRow = row;
+      row.style.opacity = '0.5';
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragend', () => {
+      draggedRow = null;
+      row.style.opacity = '';
+    });
+    row.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (draggedRow && draggedRow !== row) {
+        row.style.borderTop = '2px solid #0066cc';
+      }
+    });
+    row.addEventListener('dragleave', () => {
+      row.style.borderTop = '';
+    });
+    row.addEventListener('drop', (e) => {
+      e.preventDefault();
+      row.style.borderTop = '';
+      if (draggedRow && draggedRow !== row) {
+        ingredientsList.insertBefore(draggedRow, row);
+      }
+    });
+
+    ingredientsList.appendChild(row);
+    return row;
+  }
+
+  function serialize() {
+    const rows = Array.from(ingredientsList.children);
+    const ingredients = rows.map(row => {
+      const inputs = row.querySelectorAll('input');
+      const select = row.querySelector('select');
+      const qty = inputs[0].value.trim();
+      const name = inputs[1].value.trim();
+      const desc = inputs[2].value.trim();
+      const unit = select.value.trim();
+
+      if (!name) return null;
+
+      let result = '';
+      if (qty) result += qty + ' ';
+      if (unit) result += unit + ' ';
+      result += name;
+      if (desc) result += ' (' + desc + ')';
+      return result;
+    }).filter(Boolean);
+
+    hiddenField.value = ingredients.join(', ');
+  }
+
+  // Prepopulate from existing ingredients
+  const raw = `{{ ingredients_raw|escapejs }}`;
+  if (raw) {
+    const items = raw.split(',').map(s => s.trim()).filter(s => s);
+    items.forEach(item => {
+      // Parse: "1 cup flour (diced)" or "1 cup flour" or "flour"
+      const match = item.match(/^([0-9.]+)?\s*([a-z]+)?\s*(.+?)(?:\s*\(([^)]+)\))?\s*$/i);
+      if (match) {
+        const qty = match[1] || '';
+        const unit = match[2] || '';
+        const name = match[3] || '';
+        const desc = match[4] || '';
+        createIngredientRow(qty, unit, name, desc);
+      }
+    });
+  }
+
+  // Ensure at least one row
+  if (ingredientsList.children.length === 0) {
+    createIngredientRow();
+  }
+
+  // Add ingredient row button
+  addBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    createIngredientRow();
+  });
+
+  // Serialize before form submit
+  const form = document.querySelector('form');
+  form.addEventListener('submit', serialize);
+})();
+</script>
 {% endblock %}

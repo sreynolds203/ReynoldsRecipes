@@ -7,9 +7,10 @@
   </div>
 
   {% if recipes %}
-    <div style="margin-top:8px;color:#555">From:
+    <div style="margin-top:8px;color:#555;font-size:.95rem">
+      <strong>From {{ recipes|length }} recipe{{ recipes|length|pluralize }}:</strong>
       {% for r in recipes %}
-        <strong>{{ r.title }}</strong>{% if not forloop.last %}, {% endif %}
+        {{ r.title }}{% if not forloop.last %}, {% endif %}
       {% endfor %}
     </div>
   {% endif %}
@@ -17,14 +18,37 @@
   <hr style="margin:12px 0"/>
 
   {% if items %}
-    <ul>
-      {% for ing, count in items %}
-        <li>{{ ing }}{% if count > 1 %} <em>(appears in {{ count }} recipes)</em>{% endif %}</li>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      {% for item in items %}
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:10px;background:#f9f9f9;border-radius:6px;border-left:3px solid #0066cc">
+          <div style="flex:1">
+            <div style="font-weight:600;text-transform:capitalize">{{ item.name }}</div>
+            {% if item.recipes %}
+              <div style="font-size:.85rem;color:#666;margin-top:2px">
+                In: {% for recipe in item.recipes %}{{ recipe }}{% if not forloop.last %}, {% endif %}{% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          <div style="text-align:right;margin-left:12px;white-space:nowrap">
+            {% if item.quantity %}
+              <strong style="font-size:1.05rem">{{ item.quantity }}</strong>
+            {% else %}
+              <em style="color:#999">as needed</em>
+            {% endif %}
+            {% if item.count > 1 %}
+              <div style="font-size:.85rem;color:#666">× {{ item.count }} recipes</div>
+            {% endif %}
+          </div>
+        </div>
       {% endfor %}
-    </ul>
+    </div>
   {% else %}
-    <p>No ingredients found. Select one or more recipes to build a shopping list.</p>
+    <p style="color:#999">No ingredients found. Select one or more recipes to build a shopping list.</p>
   {% endif %}
 
+  <div style="margin-top:20px;padding-top:12px;border-top:1px solid #eee">
+    <button onclick="window.print()" style="background:#0066cc;color:#fff;padding:8px 16px;border:none;border-radius:6px;cursor:pointer;margin-right:8px">Print</button>
+    <a href="{% url 'recipes:list' %}" style="padding:8px 16px;border:1px solid #ddd;border-radius:6px;display:inline-block;text-decoration:none;color:#333">Back</a>
+  </div>
 </div>
 {% endblock %}

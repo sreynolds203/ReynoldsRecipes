@@ -2,16 +2,53 @@
 {% block content %}
 <main style="max-width:800px;margin:24px auto">
   <h1>{{ object.title }}</h1>
+  <div style="color:#666;margin-top:6px">
+    {% if object.author %}<strong>{{ object.author }}</strong>{% endif %}
+    {% if object.prep_time_minutes %}<span>{{ object.prep_time_minutes }} min prep</span>{% endif %}
+    {% if object.cook_time_minutes %}<span>{{ object.cook_time_minutes }} min cook</span>{% endif %}
+  </div>
   {% if object.image %}
     <img src="{{ object.image.url }}" alt="" style="width:100%;max-height:360px;object-fit:cover;border-radius:8px"/>
   {% endif %}
   <p style="color:#555">{{ object.description }}</p>
 
   <h3>Ingredients</h3>
-  <pre style="white-space:pre-wrap">{{ object.ingredients }}</pre>
+  {% if ingredients_list %}
+    <ul style="background:#fff;padding:12px;border-radius:6px;list-style:disc;margin-left:18px">
+      {% for ing in ingredients_list %}
+        <li style="margin:6px 0">{{ ing }}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <pre style="white-space:pre-wrap">{{ object.ingredients }}</pre>
+  {% endif %}
 
-  <h3>Steps</h3>
-  <pre style="white-space:pre-wrap">{{ object.steps }}</pre>
+  <h3 style="margin-top:18px">Steps</h3>
+  {% if steps_list %}
+    {% if steps_numbered %}
+      <div style="background:#fff;padding:12px;border-radius:6px">
+        {% for step in steps_list %}
+          <div style="margin:10px 0">{{ step|linebreaks }}</div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <ol style="background:#fff;padding:12px;border-radius:6px">
+        {% for step in steps_list %}
+          <li style="margin:10px 0">{{ step|linebreaks }}</li>
+        {% endfor %}
+      </ol>
+    {% endif %}
+  {% else %}
+    <pre style="white-space:pre-wrap">{{ object.steps }}</pre>
+  {% endif %}
+
+  {% if tags_list %}
+    <div style="margin-top:12px">
+      {% for tag in tags_list %}
+        <span style="display:inline-block;background:#eef6ff;color:#0366d6;padding:4px 8px;border-radius:12px;margin-right:6px;font-size:.85rem">{{ tag }}</span>
+      {% endfor %}
+    </div>
+  {% endif %}
 
   <p>
     <a href="{% url 'recipes:update' object.pk %}">Edit</a> ·
