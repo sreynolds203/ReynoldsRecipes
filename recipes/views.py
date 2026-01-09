@@ -1,15 +1,33 @@
 from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 from django.urls import reverse_lazy
-from django.shortcuts import render
-from .models import Recipe
+from django.shortcuts import render, redirect
+from django.http import JsonResponse
+from .models import Recipe, MealPlan
 from .ingredient_parser import normalize_ingredient, aggregate_ingredients, format_quantity
 import re
+from datetime import datetime, timedelta
 
 class RecipeListView(ListView):
     model = Recipe
     template_name = 'recipes/index.html'
     context_object_name = 'recipes'
     paginate_by = 12
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        meal_plans = MealPlan.objects.all().select_related('recipe').order_by('day')
+        days_dict = {}
+        for day, day_name in MealPlan.DAYS_OF_WEEK:
+            days_dict[day] = {'name': day_name, 'recipes': []}
+        
+        for mp in meal_plans:
+            days_dict[mp.day]['recipes'].append({
+                'id': mp.id,
+                'recipe': mp.recipe,
+            })
+        
+        ctx['meal_plan_days'] = [days_dict[day[0]] for day in MealPlan.DAYS_OF_WEEK]
+        return ctx
 
 class RecipeDetailView(DetailView):
     model = Recipe
@@ -156,3 +174,102 @@ def shopping_list(request):
         'items': items,
         'recipes': recipes,
     })
+
+
+def get_meal_plan(request):
+    """Return meal plan as JSON for AJAX requests."""
+    meal_plans = MealPlan.objects.all().select_related('recipe').order_by('day')
+    days = {day[0]: {'day_name': day[1], 'recipes': []} for day in MealPlan.DAYS_OF_WEEK}
+    
+    for mp in meal_plans:
+        days[mp.day]['recipes'].append({
+            'id': mp.id,
+            'recipe_id': mp.recipe.id,
+            'recipe_title': mp.recipe.title,
+        })
+    
+    return JsonResponse(list(days.values()), safe=False)
+
+
+def add_to_meal_plan(request, recipe_id):
+    """Add a recipe to the meal plan for a specific day."""
+    if request.method == 'POST':
+        day = request.POST.get('day')
+        if day:
+            recipe = Recipe.objects.get(pk=recipe_id)
+            MealPlan.objects.create(recipe=recipe, day=day)
+            return redirect('recipes:list')
+    
+    recipe = Recipe.objects.get(pk=recipe_id)
+    return render(request, 'recipes/add_to_meal_plan.html', {
+        'recipe': recipe,
+        'days': MealPlan.DAYS_OF_WEEK,
+    })
+
+
+def remove_from_meal_plan(request, meal_plan_id):
+    """Remove a recipe from the meal plan."""
+    meal_plan = MealPlan.objects.get(pk=meal_plan_id)
+    meal_plan.delete()
+    return redirect('recipes:list')
+
+
+def clear_meal_plan(request):
+    """Clear all recipes from the meal plan."""
+    if request.method == 'POST':
+        MealPlan.objects.all().delete()
+        return redirect('recipes:list')
+    return render(request, 'recipes/confirm_clear_meal_plan.html')
+
+
+def create_meal_plan_bulk(request):
+    """Create meal plan entries from selected recipes with auto-assigned days starting from a start date."""
+    if request.method == 'POST':
+        # Support explicit assignments: multiple values like 'assignments' = 'recipeid|YYYY-MM-DD'
+        assignments = request.POST.getlist('assignments')
+        if assignments:
+            days_of_week = [day[0] for day in MealPlan.DAYS_OF_WEEK]
+            for a in assignments:
+                try:
+                    recipe_id, date_str = a.split('|', 1)
+                    recipe = Recipe.objects.get(pk=int(recipe_id))
+                    current_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                    day_name = days_of_week[current_date.weekday()]
+                    MealPlan.objects.create(recipe=recipe, day=day_name)
+                except Exception:
+                    # skip invalid entries
+                    continue
+            return redirect('recipes:list')
+
+        # Backwards compatible: simple start_date + recipe_ids
+        recipe_ids = request.POST.getlist('recipe_ids')
+        start_date_str = request.POST.get('start_date')
+        
+        if recipe_ids and start_date_str:
+            try:
+                start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            except ValueError:
+                start_date = None
+            
+            if start_date:
+                recipes = Recipe.objects.filter(pk__in=recipe_ids)
+                
+                # Map date to day of week
+                days_of_week = [day[0] for day in MealPlan.DAYS_OF_WEEK]
+                
+                for idx, recipe in enumerate(recipes):
+                    current_date = start_date + timedelta(days=idx)
+                    day_name = days_of_week[current_date.weekday()]  # 0=Monday, 6=Sunday
+                    MealPlan.objects.create(recipe=recipe, day=day_name)
+                
+                return redirect('recipes:list')
+    
+    # GET request: show form with selected recipes
+    recipe_ids = request.GET.getlist('recipe_ids')
+    recipes = Recipe.objects.filter(pk__in=recipe_ids)
+    
+    return render(request, 'recipes/meal_plan_select_date.html', {
+        'selected_recipes': recipes,
+        'recipe_ids': recipe_ids,
+    })
+

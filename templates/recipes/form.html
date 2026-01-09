@@ -52,7 +52,7 @@
       <button type="button" id="add-ingredient-btn" style="background:#0066cc;color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer;margin-bottom:12px;font-weight:600">+ Add Ingredient</button>
 
       <!-- Hidden textarea to store serialized ingredients -->
-      <textarea id="{{ form.ingredients.id_for_label }}" name="ingredients" style="display:none">{{ ingredients_raw }}</textarea>
+      <textarea id="id_ingredients" name="ingredients" style="display:none">{{ ingredients_raw }}</textarea>
       {% if form.ingredients.errors %}<div style="color:red;font-size:.9rem">{{ form.ingredients.errors }}</div>{% endif %}
     </div>
 
@@ -86,7 +86,7 @@
   ];
 
   const ingredientsList = document.getElementById('ingredients-list');
-  const hiddenField = document.getElementById('{{ form.ingredients.id_for_label }}');
+  const hiddenField = document.getElementById('id_ingredients');
   const addBtn = document.getElementById('add-ingredient-btn');
   let draggedRow = null;
 

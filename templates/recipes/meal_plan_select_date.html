@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width:600px;margin:40px auto;padding:0 16px">
+  <h1>Create Meal Plan</h1>
+  
+  <div style="background:#f8f9fa;padding:20px;border-radius:8px;margin-bottom:20px">
+    <h2 style="margin-top:0;font-size:1.1rem">Selected Recipes</h2>
+    <ul style="margin:0;padding-left:20px">
+    {% for recipe in selected_recipes %}
+      <li>{{ recipe.title }}</li>
+    {% endfor %}
+    </ul>
+  </div>
+
+  <form id="meal-plan-form" method="post" style="background:#fff;padding:20px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.06)">
+    {% csrf_token %}
+    
+    <!-- Hidden inputs for recipe IDs -->
+    {% for recipe_id in recipe_ids %}
+      <input type="hidden" name="recipe_ids" value="{{ recipe_id }}">
+    {% endfor %}
+
+    <div style="display:flex;gap:12px;margin-bottom:12px;align-items:center">
+      <div style="flex:1">
+        <label for="start_date" style="display:block;font-weight:600;margin-bottom:8px">Start Date</label>
+        <input type="date" id="start_date" name="start_date" required style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:1rem">
+      </div>
+      <div style="flex:1">
+        <label for="end_date" style="display:block;font-weight:600;margin-bottom:8px">End Date (optional)</label>
+        <input type="date" id="end_date" name="end_date" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:4px;font-size:1rem">
+      </div>
+    </div>
+
+    <div style="color:#666;font-size:.9rem;margin-bottom:12px">Recipes will be auto-assigned to the available dates; you can drag-and-drop recipes between dates to adjust.</div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-bottom:12px">
+      <a href="{% url 'recipes:list' %}" style="padding:8px 16px;background:#95a5a6;color:#fff;text-decoration:none;border-radius:4px;display:inline-block">Cancel</a>
+      <button type="button" id="preview-btn" style="padding:8px 16px;background:#0066cc;color:#fff;border:none;border-radius:4px;cursor:pointer;margin-left:8px" onclick="buildPreview()">Preview & Arrange</button>
+      <button type="submit" id="save-btn" style="padding:8px 16px;background:#27ae60;color:#fff;border:none;border-radius:4px;cursor:pointer;margin-left:8px" onclick="serializeAssignments()">Save Meal Plan</button>
+    </div>
+
+    <div id="preview-area" style="min-height:120px;border:1px dashed #ddd;padding:12px;border-radius:6px;background:#fafafa;display:none"></div>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function formatDate(d) {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  const dd = String(d.getDate()).padStart(2,'0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function buildPreview() {
+  const start = document.getElementById('start_date').value;
+  if (!start) { alert('Please choose a start date'); return; }
+  const end = document.getElementById('end_date').value;
+  const recipeEls = Array.from(document.querySelectorAll('input[name="recipe_ids"]')).map(i=>i.value);
+  let dates = [];
+  const startDate = new Date(start + 'T00:00:00');
+  if (end) {
+    const endDate = new Date(end + 'T00:00:00');
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate()+1)) {
+      dates.push(new Date(d));
+    }
+  } else {
+    // create as many dates as recipes
+    for (let i=0;i<recipeEls.length;i++) {
+      const d = new Date(startDate);
+      d.setDate(d.getDate()+i);
+      dates.push(d);
+    }
+  }
+
+  // Build columns
+  const preview = document.getElementById('preview-area');
+  preview.innerHTML = '';
+  preview.style.display = 'flex';
+  preview.style.gap = '8px';
+
+  // initial assignment: distribute recipes one per date in order
+  const assignments = {};
+  recipeEls.forEach((rid, idx) => {
+    const dateIdx = idx % dates.length;
+    const dateKey = formatDate(dates[dateIdx]);
+    if (!assignments[dateKey]) assignments[dateKey] = [];
+    assignments[dateKey].push(rid);
+  });
+
+  dates.forEach(d => {
+    const dateKey = formatDate(d);
+    const col = document.createElement('div');
+    col.style.flex = '1';
+    col.style.minWidth = '140px';
+    col.style.background = '#fff';
+    col.style.border = '1px solid #eee';
+    col.style.borderRadius = '6px';
+    col.style.padding = '8px';
+    col.style.maxHeight = '400px';
+    col.style.overflowY = 'auto';
+
+    const title = document.createElement('div');
+    title.style.fontWeight = '600';
+    title.style.marginBottom = '8px';
+    title.textContent = dateKey;
+    col.appendChild(title);
+
+    const list = document.createElement('div');
+    list.className = 'date-column';
+    list.dataset.date = dateKey;
+    list.style.minHeight = '40px';
+
+    const items = assignments[dateKey] || [];
+    items.forEach(rid => {
+      const li = document.createElement('div');
+      li.className = 'assign-item';
+      li.draggable = true;
+      li.dataset.recipeId = rid;
+      li.style.padding = '6px 8px';
+      li.style.marginBottom = '6px';
+      li.style.background = '#f8f9fa';
+      li.style.border = '1px solid #eee';
+      li.style.borderRadius = '4px';
+      li.style.cursor = 'grab';
+      const titleText = document.querySelector('ul li:nth-child(1)');
+      // find recipe title by matching hidden recipe_ids order
+      const recipeTitle = (function(id){
+        const idx = Array.from(document.querySelectorAll('input[name="recipe_ids"]')).map(i=>i.value).indexOf(id);
+        return document.querySelectorAll('ul li')[idx] ? document.querySelectorAll('ul li')[idx].textContent : id;
+      })(rid);
+      li.textContent = recipeTitle;
+      list.appendChild(li);
+    });
+
+    // drag handlers
+    list.addEventListener('dragover', function(e){ e.preventDefault(); this.style.background='#fcfcfd'; });
+    list.addEventListener('dragleave', function(e){ this.style.background=''; });
+    list.addEventListener('drop', function(e){
+      e.preventDefault(); this.style.background='';
+      const id = e.dataTransfer.getData('text/plain');
+      const el = document.querySelector(`[data-recipe-id='${id}']`);
+      if (el) this.appendChild(el);
+    });
+
+    preview.appendChild(col);
+    col.appendChild(list);
+  });
+
+  // make items draggable
+  document.querySelectorAll('.assign-item').forEach(it => {
+    it.addEventListener('dragstart', function(e){ e.dataTransfer.setData('text/plain', this.dataset.recipeId); this.style.opacity='0.5'; });
+    it.addEventListener('dragend', function(){ this.style.opacity=''; });
+  });
+}
+
+function serializeAssignments(){
+  // remove previous assignment inputs
+  document.querySelectorAll('input[name="assignments"]').forEach(i=>i.remove());
+  const preview = document.getElementById('preview-area');
+  if (!preview || preview.style.display==='none') { return; }
+  const cols = document.querySelectorAll('.date-column');
+  cols.forEach(col => {
+    const date = col.dataset.date;
+    Array.from(col.querySelectorAll('.assign-item')).forEach(item => {
+      const inp = document.createElement('input');
+      inp.type='hidden';
+      inp.name='assignments';
+      inp.value = item.dataset.recipeId + '|' + date;
+      document.getElementById('meal-plan-form').appendChild(inp);
+    });
+  });
+}
+</script>
+{% endblock %}

@@ -1,48 +1,135 @@
 {% extends "base.html" %}
 {% block content %}
-<div style="max-width:900px;margin:24px auto">
-  <div style="display:flex;justify-content:space-between;align-items:center">
-    <h1>Recipes</h1>
-    <div>
-      <a href="{% url 'recipes:create' %}">+ New Recipe</a>
+<div style="display:flex;gap:24px;max-width:1400px;margin:24px auto;padding:0 16px">
+  <!-- Left Sidebar: Meal Plan -->
+  <div style="width:280px;flex-shrink:0">
+    <div style="background:#fff;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.06);padding:16px;position:sticky;top:24px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h2 style="margin:0;font-size:1.2rem">Meal Plan</h2>
+        {% if meal_plan_days|length %}
+          <form method="post" action="{% url 'recipes:clear_meal_plan' %}" style="margin:0" onsubmit="return confirm('Clear all recipes from meal plan?')">
+            {% csrf_token %}
+            <button type="submit" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:.85rem;text-decoration:underline">Clear</button>
+          </form>
+        {% endif %}
+      </div>
+
+      {% if meal_plan_days %}
+        <div style="max-height:600px;overflow-y:auto">
+          {% for day in meal_plan_days %}
+            {% if day.recipes %}
+              <div style="margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #eee">
+                <div style="font-weight:600;font-size:.95rem;color:#333;margin-bottom:6px">{{ day.name }}</div>
+                {% for item in day.recipes %}
+                  <div style="background:#f8f9fa;padding:8px;border-radius:4px;margin-bottom:4px;font-size:.85rem;display:flex;justify-content:space-between;align-items:center">
+                    <a href="{% url 'recipes:detail' item.recipe.id %}" style="flex:1;color:#2c3e50;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ item.recipe.title }}</a>
+                    <form method="post" action="{% url 'recipes:remove_from_meal_plan' item.id %}" style="margin:0;display:inline" onsubmit="this.parentElement.style.opacity='0.5'">
+                      {% csrf_token %}
+                      <button type="submit" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:.9rem;padding:2px 4px">✕</button>
+                    </form>
+                  </div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% else %}
+        <p style="color:#999;font-size:.9rem;margin:0">No recipes in meal plan. Add some from recipes below!</p>
+      {% endif %}
     </div>
   </div>
 
-  <form method="post" action="{% url 'recipes:shopping_list' %}">
-    {% csrf_token %}
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
-      <div></div>
-      <button type="submit">Create Shopping List from Selected</button>
+  <!-- Right Side: Recipes -->
+  <div style="flex:1;min-width:0">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h1 style="margin:0">Recipes</h1>
+      <div>
+        <a href="{% url 'recipes:create' %}" style="background:#0066cc;color:#fff;padding:10px 16px;text-decoration:none;border-radius:4px;font-weight:600;display:inline-block">+ New Recipe</a>
+      </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-top:12px">
-    {% for r in recipes %}
-      <div style="background:#fff;padding:12px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.06);position:relative;overflow:hidden">
-        <div style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.9);padding:4px 6px;border-radius:6px;z-index:2">
-          <label style="font-size:.9rem;display:flex;align-items:center;gap:6px"><input type="checkbox" name="selected" value="{{ r.pk }}"> Select</label>
-        </div>
-        {% if r.image %}
-          <img src="{{ r.image.url }}" alt="" style="width:100%;height:140px;object-fit:cover;border-radius:6px;margin-bottom:8px"/>
-        {% endif %}
-        <div style="font-weight:600">{{ r.title }}</div>
-        <div style="font-size:.9rem;color:#555">{{ r.description|truncatechars:80 }}</div>
-        <div style="margin-top:8px">
-          <a href="{% url 'recipes:detail' r.pk %}">View</a> ·
-          <a href="{% url 'recipes:update' r.pk %}">Edit</a>
+    <form method="post" action="{% url 'recipes:shopping_list' %}">
+      {% csrf_token %}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;gap:8px">
+        <div></div>
+        <div style="position:relative;display:inline-block">
+          <button type="button" id="create-dropdown-btn" style="background:#0066cc;color:#fff;padding:10px 16px;border:none;border-radius:4px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:6px" onclick="toggleCreateDropdown()">
+            Create from Selected <span style="font-size:12px">▼</span>
+          </button>
+          <div id="create-dropdown-menu" style="display:none;position:absolute;top:100%;right:0;background:#fff;border:1px solid #ddd;border-radius:4px;box-shadow:0 4px 8px rgba(0,0,0,0.1);z-index:10;min-width:200px;margin-top:4px">
+            <button type="submit" name="action" value="shopping_list" style="display:block;width:100%;padding:10px 16px;border:none;background:none;text-align:left;cursor:pointer;font-size:14px;color:#333" onclick="if(!validateSelection()){ alert('Please select at least one recipe'); return false;} document.getElementById('create-dropdown-menu').style.display='none'">
+              Shopping List
+            </button>
+            <button type="button" style="display:block;width:100%;padding:10px 16px;border:none;border-top:1px solid #eee;background:none;text-align:left;cursor:pointer;font-size:14px;color:#333" onclick="handleCreateMealPlan(); document.getElementById('create-dropdown-menu').style.display='none'">
+              Meal Plan
+            </button>
+          </div>
         </div>
       </div>
-    {% empty %}
-      <p>No recipes yet. <a href="{% url 'recipes:create' %}">Add one</a>.</p>
-    {% endfor %}
-    </div>
-  </form>
 
-  {% if is_paginated %}
-    <div style="margin-top:16px">
-      {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}">‹ prev</a>{% endif %}
-      Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
-      {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}">next ›</a>{% endif %}
-    </div>
-  {% endif %}
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;margin-top:12px">
+      {% for r in recipes %}
+        <div style="background:#fff;padding:12px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.06);position:relative;overflow:hidden">
+          <div style="position:absolute;top:8px;right:8px;background:rgba(255,255,255,0.9);padding:4px 6px;border-radius:6px;z-index:2;display:flex;gap:4px;flex-direction:column;font-size:.8rem">
+            <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+              <input type="checkbox" name="selected" value="{{ r.pk }}"> Select
+            </label>
+          </div>
+          {% if r.image %}
+            <img src="{{ r.image.url }}" alt="" style="width:100%;height:140px;object-fit:cover;border-radius:6px;margin-bottom:8px"/>
+          {% endif %}
+          <div style="font-weight:600">{{ r.title }}</div>
+          <div style="font-size:.9rem;color:#555">{{ r.description|truncatechars:80 }}</div>
+          <div style="margin-top:8px">
+            <a href="{% url 'recipes:detail' r.pk %}">View</a> ·
+            <a href="{% url 'recipes:update' r.pk %}">Edit</a>
+          </div>
+        </div>
+      {% empty %}
+        <p>No recipes yet. <a href="{% url 'recipes:create' %}">Add one</a>.</p>
+      {% endfor %}
+      </div>
+    </form>
+
+    {% if is_paginated %}
+      <div style="margin-top:16px">
+        {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}">‹ prev</a>{% endif %}
+        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+        {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}">next ›</a>{% endif %}
+      </div>
+    {% endif %}
+  </div>
 </div>
+
+<script>
+function toggleCreateDropdown() {
+  const menu = document.getElementById('create-dropdown-menu');
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(event) {
+  const btn = document.getElementById('create-dropdown-btn');
+  const menu = document.getElementById('create-dropdown-menu');
+  if (!btn.contains(event.target) && !menu.contains(event.target)) {
+    menu.style.display = 'none';
+  }
+});
+
+function validateSelection() {
+  const checkboxes = document.querySelectorAll('input[name="selected"]:checked');
+  return checkboxes.length > 0;
+}
+
+function handleCreateMealPlan() {
+  const checkboxes = document.querySelectorAll('input[name="selected"]:checked');
+  if (checkboxes.length === 0) {
+    alert('Please select at least one recipe');
+    return;
+  }
+  
+  const recipeIds = Array.from(checkboxes).map(cb => cb.value).join('&recipe_ids=');
+  window.location.href = '{% url "recipes:create_meal_plan_bulk" %}?recipe_ids=' + recipeIds;
+}
+</script>
 {% endblock %}
